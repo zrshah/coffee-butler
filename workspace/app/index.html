@@ -4,20 +4,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Coffee Butler</title>
-    <style>
-      body {
-        margin: 0;
-        background: black;
-        color: #4cc9f0;
-        font-family: sans-serif;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
+    <    <style>
+      body { margin: 0; background: black; overflow: hidden; }
+      canvas { display: block; }
+      #fps {
+        position: fixed; top: 8px; left: 8px;
+        color: #4cc9f0; font: 16px monospace;
       }
     </style>
   </head>
   <body>
-    <h1>Good morning. The butler is in.</h1>
+    <div id="fps">-- fps</div>
+    <script type="importmap">
+      { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    </script>
+    <script type="module" src="sphere.js"></script>
   </body>
 </html>
+
+
