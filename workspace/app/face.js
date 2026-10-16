@@ -9,6 +9,13 @@ const BLINK_EVERY_MS = [2500, 6000]; // random gap between blinks (min, max)
 const BLINK_MS = 140;
 const AWAY_OPACITY = 0.35;         // dimmer while idling
 
+// Head wobble: a side-to-side tilt (ear toward shoulder), always on, livelier while talking.
+const WOBBLE_ANGLE = 0.08;          // max tilt in radians when quiet (~5 degrees)
+const WOBBLE_ANGLE_TALKING = 0.16;  // ~9 degrees while talking
+const WOBBLE_SPEED = 2.2;           // quiet: about one wobble every 3 seconds
+const WOBBLE_SPEED_TALKING = 5.5;   // talking: about one wobble a second
+const NECK_LENGTH = 1.2;            // the tilt pivots from this far below the head's center
+
 export function createFace(container) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
@@ -51,6 +58,9 @@ export function createFace(container) {
   let wakeDone = Promise.resolve();
   let talking = false;
   let nextBlinkAt = performance.now() + 2000;
+  let lastFrameAt = performance.now();
+  let wobblePhase = 0;
+  let wobbleAngle = WOBBLE_ANGLE;
 
   // FPS counter for the debug display.
   let frames = 0, fpsWindowStart = performance.now(), fps = 0;
@@ -68,6 +78,17 @@ export function createFace(container) {
     const slow = mode === 'away' ? 0.5 : 1;
     head.position.y = Math.sin(t * 1.5 * slow) * 0.06;
     head.rotation.y = Math.sin(t * 0.4 * slow) * 0.25;
+
+    // Head wobble. We advance a "phase" by speed x time-since-last-frame instead of
+    // using sin(t * speed) directly, so switching speeds doesn't make the head jump.
+    const dt = Math.min(0.1, (now - lastFrameAt) / 1000); // cap: first frame after sleeping
+    lastFrameAt = now;
+    wobblePhase += dt * (talking ? WOBBLE_SPEED_TALKING : WOBBLE_SPEED) * slow;
+    const targetAngle = talking ? WOBBLE_ANGLE_TALKING : WOBBLE_ANGLE;
+    wobbleAngle += (targetAngle - wobbleAngle) * Math.min(1, dt * 4); // ease toward target
+    head.rotation.z = Math.sin(wobblePhase) * wobbleAngle;
+    // Pivot from the "neck": when the top tilts left, the whole head swings left too.
+    head.position.x = -Math.sin(head.rotation.z) * NECK_LENGTH;
 
     // Blink: squash the eyes flat for a moment.
     const blinking = now >= nextBlinkAt && now < nextBlinkAt + BLINK_MS;
