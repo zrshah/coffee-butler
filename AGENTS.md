@@ -37,7 +37,7 @@ One character: the house butler, a comedian who switches accents (British, India
 ## Constraints
 
 - Plain HTML/CSS/JavaScript with ES modules. No build step, no framework. Three.js loaded from a CDN for the face.
-- The tablet is old: keep rendering light, test on the real device early. If Three.js stutters, fall back to a 2D canvas with faked 3D.
+- The tablet is old: keep rendering light, test on the real device early. Baseline (M1): a 24x16 wireframe sphere at pixel ratio 1 runs at ~30+ fps on the A7 Lite, including the flip. Not much headroom, so check fps whenever the face gets more detail. If Three.js stutters, fall back to a 2D canvas with faked 3D.
 - Camera access requires a secure context: `localhost` (Live Server) for local testing, GitHub Pages (HTTPS) for the tablet.
 - A web page can't turn the screen off. "Sleeping" is a black screen; use the Wake Lock API so the tablet doesn't dim and stop the camera.
 
@@ -49,3 +49,12 @@ One character: the house butler, a comedian who switches accents (British, India
 4. The hologram face: wireframe sphere, blinking, bobbing, talking mouth.
 5. Voice and phrases: categories, audio clips in several accents, wired to the brain.
 6. Mount: kiosk fullscreen, Wake Lock, plugged in.
+
+## Status (2026-10-15)
+
+Milestone 1 done and tested on the tablet. Milestones 2 to 6 are built and tested on a Mac (brain unit tests: `node --test workspace/app/brain.test.js`; page checked in headless Chrome with a fake camera), **not yet on the tablet**. Next: one round of tablet testing, then tune `MOTION_SCORE_THRESHOLD`, `GOODBYE_AFTER_MS`, and fps.
+
+- Voice uses the browser's text-to-speech as a stand-in; a phrase with an `audio` field plays that clip instead. Real recorded clips are still to do.
+- The debug readout (state, motion %, fps, last line) shows by default; add `?debug=0` to the URL to hide it.
+- Press M on a computer to fake motion.
+

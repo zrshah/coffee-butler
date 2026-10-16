@@ -1,0 +1,24 @@
+[
+  { "id": "greet-finest", "category": "greeting", "accent": "en-GB", "text": "Ah, a visitor! Welcome to the finest coffee establishment in this household. Also the only one." },
+  { "id": "greet-beans-expecting", "category": "greeting", "accent": "en-IN", "text": "Good to see you. The beans have been expecting you." },
+  { "id": "greet-extra-drama", "category": "greeting", "accent": "en-NG", "text": "Step right up! One espresso, extra drama." },
+  { "id": "greet-first-together", "category": "greeting", "when": "firstToday", "accent": "en-GB", "text": "First cup of the day. Let's wake up together. You go first." },
+  { "id": "greet-first-no-legs", "category": "greeting", "when": "firstToday", "accent": "en-US", "text": "Morning! I've been standing here all night. Well, floating. I don't have legs." },
+  { "id": "greet-again-already", "category": "greeting", "when": "again", "accent": "en-GB", "text": "Oh, that time already again? Another cup of coffee?" },
+  { "id": "greet-again-judging", "category": "greeting", "when": "again", "accent": "en-IN", "text": "Back so soon? I'm not judging. The machine is judging." },
+  { "id": "greet-again-union", "category": "greeting", "when": "again", "accent": "en-NG", "text": "Again? At this rate the beans will form a union." },
+
+  { "id": "mid-water-tank", "category": "middle", "accent": "en-GB", "text": "Quick reminder: the water goes in the tank. Not the bean hopper. We have all seen things." },
+  { "id": "mid-grounds-hero", "category": "middle", "accent": "en-IN", "text": "If the grounds drawer is full, now would be a heroic time to empty it." },
+  { "id": "mid-drip-tray", "category": "middle", "accent": "en-US", "text": "Check the drip tray. It's been holding a lot in lately." },
+  { "id": "mid-warm-cup", "category": "middle", "accent": "en-GB", "text": "Tip: warm the cup first. The coffee notices." },
+  { "id": "mid-best-seconds", "category": "middle", "accent": "en-NG", "text": "Honestly, watching you make coffee is the highlight of my day. I don't get out much." },
+
+  { "id": "bye-visit-soon", "category": "goodbye", "accent": "en-GB", "text": "All right, well, come visit me soon." },
+  { "id": "bye-floating", "category": "goodbye", "accent": "en-IN", "text": "Enjoy the coffee. I'll be right here. Floating. Thinking about you." },
+  { "id": "bye-while-hot", "category": "goodbye", "accent": "en-NG", "text": "Off you go. Drink it while it's hot this time." },
+
+  { "id": "back-forgot", "category": "welcomeBack", "accent": "en-GB", "text": "Forgot something? I won't tell anyone." },
+  { "id": "back-not-coffee", "category": "welcomeBack", "accent": "en-IN", "text": "You're back! I knew it wasn't just the coffee." },
+  { "id": "back-missed-me", "category": "welcomeBack", "accent": "en-NG", "text": "Missed me already?" }
+]

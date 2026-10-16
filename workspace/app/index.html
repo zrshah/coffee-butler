@@ -3,23 +3,38 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
     <title>Coffee Butler</title>
-    <    <style>
+    <style>
       body { margin: 0; background: black; overflow: hidden; }
       canvas { display: block; }
-      #fps {
-        position: fixed; top: 8px; left: 8px;
-        color: #4cc9f0; font: 16px monospace;
+
+      /* Faint horizontal lines over everything: cheap "hologram" look, no GPU cost. */
+      #scanlines {
+        position: fixed; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px 4px);
+      }
+
+      #debug {
+        position: fixed; top: 8px; left: 8px; margin: 0; max-width: 90vw;
+        color: #4cc9f0; font: 14px monospace; white-space: pre-wrap; opacity: 0.8;
+      }
+
+      #start {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #4cc9f0; font: 24px sans-serif; background: black; cursor: pointer;
       }
     </style>
   </head>
   <body>
-    <div id="fps">-- fps</div>
+    <div id="stage"></div>
+    <div id="scanlines"></div>
+    <pre id="debug"></pre>
+    <div id="start">Tap to start the butler</div>
+
     <script type="importmap">
       { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
     </script>
-    <script type="module" src="sphere.js"></script>
+    <script type="module" src="main.js"></script>
   </body>
 </html>
-
-
