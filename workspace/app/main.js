@@ -7,6 +7,8 @@ const TICK_EVERY_MS = 500;
 const PEAK_WINDOW_MS = 5000; // the readout shows the highest motion score from this long ago until now
 // Debug readout on by default while tuning. Add ?debug=0 to the address to hide it.
 const SHOW_DEBUG = new URLSearchParams(location.search).get('debug') !== '0';
+// The camera view (what the motion sensor sees) is off by default. Add ?camera=1 to show it while tuning.
+const SHOW_CAMERA = new URLSearchParams(location.search).get('camera') === '1';
 
 const startScreen = document.getElementById('start');
 const debugEl = document.getElementById('debug');
@@ -32,7 +34,7 @@ const brain = createBrain({
   },
 });
 
-const sensor = createCameraSensor({ preview: SHOW_DEBUG });
+const sensor = createCameraSensor({ preview: SHOW_CAMERA });
 if (sensor.preview) document.body.appendChild(Object.assign(sensor.preview, { id: 'camera-preview' }));
 sensor.addEventListener('score', e => {
   const now = Date.now();
