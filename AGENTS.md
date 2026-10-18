@@ -54,7 +54,7 @@ One character: the house butler, a comedian who switches accents (British, India
 
 Milestone 1 done and tested on the tablet. Milestones 2 to 6 are built and tested on a Mac (brain unit tests: `node --test workspace/app/brain.test.js`; page checked in headless Chrome with a fake camera), **not yet on the tablet**. Next: one round of tablet testing, then tune `MOTION_SCORE_THRESHOLD`, `GOODBYE_AFTER_MS`, and fps.
 
-- Voice uses the browser's text-to-speech as a stand-in; a phrase with an `audio` field plays that clip instead. Real recorded clips are still to do.
-- The debug readout (state, motion %, fps, last line) shows by default; add `?debug=0` to the URL to hide it.
+- Voice: every phrase has an `audio` clip in `workspace/app/audio/`, generated free with Microsoft Edge voices by `uv run --with edge-tts python workspace/tools/make_voices.py` (rerun after editing phrases; a phrase can override its voice with a `voice` field). Browser text-to-speech is only the fallback for phrases without a clip. Zain may later replace some clips with ElevenLabs or his own recordings.
+- The debug readout (state, camera status, motion % with 5s peak, fps, last line, plus a live view of the sensor's 64x48 frame with changed pixels in red) shows by default; add `?debug=0` to the URL to hide it.
 - Press M on a computer to fake motion.
 
