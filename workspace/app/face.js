@@ -8,7 +8,7 @@
 // --- Look and feel ---
 // The drawing uses a 1200x800 canvas; the browser scales it to fit the screen.
 const CX = 600, CY = 402, R = 296;  // head center and radius
-const WAKE_FLIP_MS = 900;          // the power-up flip when someone arrives
+const WAKE_FLIP_MS = 600;          // the power-up flip when someone arrives (the greeting waits for it)
 const BLINK_EVERY_MS = [2500, 6000]; // random gap between blinks (min, max)
 const BLINK_MS = 140;
 const AWAY_OPACITY = 0.35;         // dimmer while idling
@@ -231,7 +231,8 @@ export function createFace(container) {
     // stop the mouth after roughly how long the line should take to say.
     talkTimer = setTimeout(done, 1500 + phrase.text.split(' ').length * 450);
     if (phrase.audio) {
-      currentAudio = new Audio(phrase.audio);
+      currentAudio = clips.get(phrase.audio) ?? new Audio(phrase.audio);
+      currentAudio.currentTime = 0;
       currentAudio.onended = currentAudio.onerror = done;
       currentAudio.play().catch(done);
     } else if ('speechSynthesis' in window) {
@@ -243,6 +244,18 @@ export function createFace(container) {
       speechSynthesis.speak(utterance);
     } else {
       setTimeout(done, 2000);
+    }
+  }
+
+  // Download every clip up front, so the first time a line plays there's no wait.
+  const clips = new Map();
+  function preload(phrases) {
+    for (const { audio } of phrases) {
+      if (!audio || clips.has(audio)) continue;
+      const clip = new Audio(audio);
+      clip.preload = 'auto';
+      clip.load();
+      clips.set(audio, clip);
     }
   }
 
@@ -258,7 +271,7 @@ export function createFace(container) {
   }
 
   sleep();
-  return { wake, sleep, idle, lookAlive, say, getFps: () => (mode === 'sleeping' ? 0 : fps) };
+  return { wake, sleep, idle, lookAlive, say, preload, getFps: () => (mode === 'sleeping' ? 0 : fps) };
 }
 
 // Latitude rings, split into front halves (lower arcs) and back halves (upper arcs).

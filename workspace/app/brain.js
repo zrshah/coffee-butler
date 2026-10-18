@@ -4,11 +4,11 @@
 // Time is passed in (`now`) so tests can fake it.
 
 // --- Timings (starting guesses; tune after living with it) ---
-export const GOODBYE_AFTER_MS = 7_000;       // still for this long while Present -> goodbye, go Away
+export const GOODBYE_AFTER_MS = 4_000;       // still for this long while Present -> goodbye, go Away
 export const SLEEP_AFTER_MS = 150_000;       // still for this long while Away -> Sleeping
-export const MIDDLE_LINE_AFTER_MS = 20_000;  // a visit this long gets one smart/useful line
+export const MIDDLE_LINE_AFTER_MS = 12_000;  // a visit this long gets one smart/useful line
 export const SOON_AGAIN_MS = 2 * 60 * 60_000; // another visit within 2h counts as "again"
-export const QUIET_BETWEEN_LINES_MS = 15_000; // a line this soon after the last one is skipped
+export const QUIET_BETWEEN_LINES_MS = 15_000; // a welcome-back this soon after the last line is skipped
 
 const VISITS_KEY = 'butler.visits';
 const PLAYED_KEY = 'butler.played';
@@ -31,8 +31,9 @@ export function createBrain({ phrases, storage, onState = () => {}, onSay = () =
   }
 
   function say(category, now, context = null) {
-    // Spacing: stay quiet if we just spoke (e.g. a walk-by, or stepping away and straight back).
-    if (now - lastLineAt < QUIET_BETWEEN_LINES_MS) return;
+    // Spacing: stepping away and straight back shouldn't get "goodbye... welcome back!".
+    // Greetings and goodbyes always play, so arriving and leaving always get a reaction.
+    if (category === 'welcomeBack' && now - lastLineAt < QUIET_BETWEEN_LINES_MS) return;
     const phrase = pickPhrase(phrases, category, context, loadJSON(storage, PLAYED_KEY, {}), random);
     if (!phrase) return;
     const played = loadJSON(storage, PLAYED_KEY, {});

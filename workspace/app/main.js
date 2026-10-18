@@ -48,6 +48,7 @@ startScreen.addEventListener('click', async () => {
   document.documentElement.requestFullscreen?.().catch(() => {});
   keepScreenOn();
   primeSpeech();
+  face.preload(phrases);
   try {
     await sensor.start();
   } catch (err) {
