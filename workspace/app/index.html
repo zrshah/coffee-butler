@@ -7,7 +7,6 @@
     <title>Coffee Butler</title>
     <style>
       body { margin: 0; background: black; overflow: hidden; }
-      canvas { display: block; }
 
       /* Faint horizontal lines over everything: cheap "hologram" look, no GPU cost. */
       #scanlines {
@@ -32,9 +31,6 @@
     <pre id="debug"></pre>
     <div id="start">Tap to start the butler</div>
 
-    <script type="importmap">
-      { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
-    </script>
     <script type="module" src="main.js"></script>
   </body>
 </html>

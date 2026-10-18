@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createBrain, pickPhrase, GOODBYE_AFTER_MS, SLEEP_AFTER_MS, MIDDLE_LINE_AFTER_MS, SOON_AGAIN_MS,
+  QUIET_BETWEEN_LINES_MS,
 } from './brain.js';
 
 const phrases = [
@@ -33,9 +34,9 @@ test('a full visit: greet, middle line, goodbye, sleep', () => {
   brain.presence(NOON);
   assert.equal(brain.getState(), 'present');
 
-  // Keep moving long enough for the middle line.
-  for (let t = NOON; t <= NOON + MIDDLE_LINE_AFTER_MS; t += 1000) { brain.presence(t); brain.tick(t); }
-  const lastMove = NOON + MIDDLE_LINE_AFTER_MS;
+  // Keep moving long enough for the middle line, and a bit after it.
+  const lastMove = NOON + MIDDLE_LINE_AFTER_MS + QUIET_BETWEEN_LINES_MS;
+  for (let t = NOON; t <= lastMove; t += 1000) { brain.presence(t); brain.tick(t); }
 
   brain.tick(lastMove + GOODBYE_AFTER_MS);
   assert.equal(brain.getState(), 'away');
@@ -48,16 +49,32 @@ test('a full visit: greet, middle line, goodbye, sleep', () => {
 test('a short visit gets no middle line', () => {
   const { brain, said } = setup();
   brain.presence(NOON);
-  brain.tick(NOON + GOODBYE_AFTER_MS);
+  brain.presence(NOON + QUIET_BETWEEN_LINES_MS); // still around after the quiet gap
+  brain.tick(NOON + QUIET_BETWEEN_LINES_MS + GOODBYE_AFTER_MS);
   assert.deepEqual(said, ['greeting', 'goodbye']);
 });
 
-test('coming back while away gets a welcome-back line', () => {
+test('a walk-by gets a greeting but no goodbye right after it', () => {
   const { brain, said } = setup();
   brain.presence(NOON);
-  brain.tick(NOON + GOODBYE_AFTER_MS);
-  brain.presence(NOON + GOODBYE_AFTER_MS + 5000);
+  brain.tick(NOON + GOODBYE_AFTER_MS); // gone after a few seconds
+  assert.equal(brain.getState(), 'away');
+  assert.deepEqual(said, ['greeting']);
+});
+
+test('coming back while away gets a welcome-back line, unless it is too soon', () => {
+  const { brain, said } = setup();
+  brain.presence(NOON);
+  brain.presence(NOON + QUIET_BETWEEN_LINES_MS);
+  const goodbyeAt = NOON + QUIET_BETWEEN_LINES_MS + GOODBYE_AFTER_MS;
+  brain.tick(goodbyeAt);
+
+  brain.presence(goodbyeAt + 5000); // straight back: stay quiet
   assert.equal(brain.getState(), 'present');
+  assert.deepEqual(said, ['greeting', 'goodbye']);
+
+  brain.tick(goodbyeAt + 5000 + GOODBYE_AFTER_MS);
+  brain.presence(goodbyeAt + 60_000); // back a minute later: say something
   assert.deepEqual(said, ['greeting', 'goodbye', 'welcomeBack']);
 });
 

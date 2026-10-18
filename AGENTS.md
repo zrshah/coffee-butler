@@ -18,7 +18,7 @@ Three independent parts. Keep them separate so the sensor can be swapped without
 
 1. **Sensor** (`sensor.js`): detects someone nearby and emits one `presence` event (an object, so a later version can add a `who` field for recognizing family members). V1 uses camera motion detection (frame differencing on a ~64x48 frame every ~200ms). V2 swaps in an M5Stack sensor over Bluetooth or MQTT.
 2. **Brain** (`brain.js`): a state machine plus phrase selection.
-3. **Face** (`face.js`): renders the hologram head and plays audio clips.
+3. **Face** (`face.js`): renders the hologram head and plays audio clips. The head is an SVG drawing designed in Figma Make (export kept in `~/Downloads/Holographic Floating Head Design`), with faked 3D: longitude lines are recomputed each frame so it can turn, and flips squash the head through zero.
 
 ## State machine
 
@@ -36,8 +36,8 @@ One character: the house butler, a comedian who switches accents (British, India
 
 ## Constraints
 
-- Plain HTML/CSS/JavaScript with ES modules. No build step, no framework. Three.js loaded from a CDN for the face.
-- The tablet is old: keep rendering light, test on the real device early. Baseline (M1): a 24x16 wireframe sphere at pixel ratio 1 runs at ~30+ fps on the A7 Lite, including the flip. Not much headroom, so check fps whenever the face gets more detail. If Three.js stutters, fall back to a 2D canvas with faked 3D.
+- Plain HTML/CSS/JavaScript with ES modules. No build step, no framework. The face is plain SVG (Three.js was used until 2026-10-16; see git history). Design tools like Figma Make output React/Vite projects: port the drawing into `face.js`, don't adopt their build setup.
+- The tablet is old: keep rendering light, test on the real device early. Baseline (M1): a 24x16 wireframe sphere at pixel ratio 1 runs at ~30+ fps on the A7 Lite, including the flip. Not much headroom, so check fps whenever the face gets more detail. The SVG face's glow blur is the most expensive part; `?glow=0` turns it off to compare fps.
 - Camera access requires a secure context: `localhost` (Live Server) for local testing, GitHub Pages (HTTPS) for the tablet.
 - A web page can't turn the screen off. "Sleeping" is a black screen; use the Wake Lock API so the tablet doesn't dim and stop the camera.
 

@@ -8,6 +8,7 @@ export const GOODBYE_AFTER_MS = 7_000;       // still for this long while Presen
 export const SLEEP_AFTER_MS = 150_000;       // still for this long while Away -> Sleeping
 export const MIDDLE_LINE_AFTER_MS = 20_000;  // a visit this long gets one smart/useful line
 export const SOON_AGAIN_MS = 2 * 60 * 60_000; // another visit within 2h counts as "again"
+export const QUIET_BETWEEN_LINES_MS = 15_000; // a line this soon after the last one is skipped
 
 const VISITS_KEY = 'butler.visits';
 const PLAYED_KEY = 'butler.played';
@@ -21,6 +22,7 @@ export function createBrain({ phrases, storage, onState = () => {}, onSay = () =
   let lastMotionAt = 0;
   let visitStartedAt = 0;
   let saidMiddleLine = false;
+  let lastLineAt = -Infinity;
 
   function setState(next) {
     const prev = state;
@@ -29,11 +31,14 @@ export function createBrain({ phrases, storage, onState = () => {}, onSay = () =
   }
 
   function say(category, now, context = null) {
+    // Spacing: stay quiet if we just spoke (e.g. a walk-by, or stepping away and straight back).
+    if (now - lastLineAt < QUIET_BETWEEN_LINES_MS) return;
     const phrase = pickPhrase(phrases, category, context, loadJSON(storage, PLAYED_KEY, {}), random);
     if (!phrase) return;
     const played = loadJSON(storage, PLAYED_KEY, {});
     played[phrase.id] = now;
     storage.setItem(PLAYED_KEY, JSON.stringify(played));
+    lastLineAt = now;
     onSay(phrase);
   }
 

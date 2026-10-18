@@ -1,102 +1,80 @@
 // Face: draws the hologram head and speaks lines.
 // It doesn't decide anything; main.js tells it to wake, sleep, idle, or say a line.
-import * as THREE from 'three';
+//
+// The head is a flat SVG drawing (design made in Figma Make) that fakes 3D:
+// the longitude lines are recalculated every frame so the grid turns like a globe,
+// and flips are faked by squashing the whole head through zero.
 
 // --- Look and feel ---
-const HOLOGRAM_BLUE = 0x4cc9f0;
-const WAKE_FLIP_MS = 900;          // the power-up spin when someone arrives
+// The drawing uses a 1200x800 canvas; the browser scales it to fit the screen.
+const CX = 600, CY = 402, R = 296;  // head center and radius
+const WAKE_FLIP_MS = 900;          // the power-up flip when someone arrives
 const BLINK_EVERY_MS = [2500, 6000]; // random gap between blinks (min, max)
 const BLINK_MS = 140;
 const AWAY_OPACITY = 0.35;         // dimmer while idling
+const LOOK_AROUND = 0.25;          // idle head turn, side to side (radians, ~14 degrees)
+const BOB_HEIGHT = 8;              // gentle idle float up and down
+// The glow is a blur, the most expensive thing to draw. Add ?glow=0 to the URL to try without it.
+const GLOW = new URLSearchParams(location.search).get('glow') !== '0';
 
 // Head wobble: a side-to-side tilt (ear toward shoulder), always on, livelier while talking.
 const WOBBLE_ANGLE = 0.08;          // max tilt in radians when quiet (~5 degrees)
 const WOBBLE_ANGLE_TALKING = 0.16;  // ~9 degrees while talking
 const WOBBLE_SPEED = 2.2;           // quiet: about one wobble every 3 seconds
 const WOBBLE_SPEED_TALKING = 5.5;   // talking: about one wobble a second
-const NECK_LENGTH = 1.2;            // the tilt pivots from this far below the head's center
 const WOBBLE_ANGLE_INDIAN = 0.3;    // ~17 degrees: the big, happy head bobble for en-IN lines
 const WOBBLE_SPEED_INDIAN = 7;
 const EXCITED_AFTER_WAKE_MS = 1800; // after waking, bobble like an Indian-accent line for this long
+const NECK_LENGTH = R;              // the tilt pivots from this far below the head's center
 
-// Grid density: lines around (longitude) and top-to-bottom (latitude).
-// M1 baseline was a 24x16 sphere at ~30 fps on the tablet; check fps after changing these.
-const HEAD_RADIUS = 1.2;
-const GRID_AROUND = 36;
-const GRID_DOWN = 24;
-const BACK_LINE_OPACITY = 0.18;    // lines on the far side of the head show through faintly
+// Grid density.
+const GRID_RINGS = 17;          // latitude lines, top to bottom
+const GRID_MERIDIANS = 24;      // longitude lines all the way around (about half are on the back)
+const RING_TILT = 0.1;          // how open the rings look; we see the head from slightly above
+const BACK_LINE_OPACITY = 0.22; // lines on the far side of the head show through faintly
 
 // Tricks: every so often the head does a flip, a spin, or a bounce.
 const TRICK_EVERY_MS = [6000, 12000]; // random gap between tricks (min, max); doubled while away
-const TRICK_MS = { flip: 750, spin: 750, bounce: 900 };
-const BOUNCE_HEIGHT = 0.45;
+const TRICK_MS = { flip: 750, spin: 900, bounce: 900 };
+const BOUNCE_HEIGHT = 110;
 
 export function createFace(container) {
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
-  camera.position.z = 5;
-
-  // Pixel ratio 1: the A7 Lite does ~30+ fps like this (Milestone 1 test).
-  const renderer = new THREE.WebGLRenderer({ antialias: false });
-  renderer.setPixelRatio(1);
-  renderer.setSize(innerWidth, innerHeight);
-  container.appendChild(renderer.domElement);
-
-  // Additive blending makes overlapping lines glow brighter, like light.
-  const glow = { color: HOLOGRAM_BLUE, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
-  const frontLines = new THREE.LineBasicMaterial({ ...glow, opacity: 1 });
-  const backLines = new THREE.LineBasicMaterial({ ...glow, opacity: BACK_LINE_OPACITY, depthTest: false });
-  const solid = new THREE.MeshBasicMaterial({ ...glow, opacity: 1 });
-
-  const head = new THREE.Group();
-  scene.add(head);
-  // Draw the grid twice: once faintly with no depth check (so the back shows through),
-  // once brightly, where an invisible inner sphere hides the back half.
-  const grid = makeGridGeometry(HEAD_RADIUS, GRID_AROUND, GRID_DOWN);
-  const back = new THREE.LineSegments(grid, backLines);
-  const blocker = new THREE.Mesh(
-    new THREE.SphereGeometry(HEAD_RADIUS * 0.9, 16, 12),
-    new THREE.MeshBasicMaterial({ colorWrite: false }), // writes depth only, draws nothing
-  );
-  const front = new THREE.LineSegments(grid, frontLines);
-  back.renderOrder = 0;
-  blocker.renderOrder = 1;
-  front.renderOrder = 2;
-  head.add(back, blocker, front);
-
-  const eyeGeometry = new THREE.SphereGeometry(0.11, 8, 6);
-  const leftEye = new THREE.Mesh(eyeGeometry, solid);
-  const rightEye = new THREE.Mesh(eyeGeometry, solid);
-  leftEye.position.set(-0.38, 0.25, 1.12);
-  rightEye.position.set(0.38, 0.25, 1.12);
-  head.add(leftEye, rightEye);
-
-  // The mouth is a ring squashed flat; stretching it taller "opens" it.
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 6, 24), solid);
-  mouth.position.set(0, -0.35, 1.1);
-  mouth.scale.y = 0.15;
-  head.add(mouth);
+  container.innerHTML = headSvg();
+  const svg = container.querySelector('svg');
+  const head = svg.querySelector('.head');
+  const frontMeridians = svg.querySelector('.meridians-front');
+  const backMeridians = svg.querySelector('.meridians-back');
+  const face = svg.querySelector('.face');
+  const eyes = svg.querySelector('.eyes');
+  const brows = svg.querySelector('.brows');
+  const mouth = svg.querySelector('.mouth');
 
   let mode = 'sleeping'; // 'sleeping' | 'awake' | 'away'
+  let running = false;
   let wakeStartedAt = -Infinity;
   let wakeDone = Promise.resolve();
   let talking = false;
-  let nextBlinkAt = performance.now() + 2000;
-  let lastFrameAt = performance.now();
-  let wobblePhase = 0;
-  let wobbleAngle = WOBBLE_ANGLE;
   let accent = null;           // accent of the line being said, e.g. 'en-IN'
   let excitedUntil = -Infinity;
   let trick = null;            // { kind, startedAt } while a trick is playing
   let nextTrickAt = Infinity;
+  let nextBlinkAt = performance.now() + 2000;
+  let lastFrameAt = performance.now();
+  let wobblePhase = 0;
+  let wobbleAngle = WOBBLE_ANGLE;
+  let browLift = 0;
 
   // FPS counter for the debug display.
   let frames = 0, fpsWindowStart = performance.now(), fps = 0;
 
   function frame(now) {
+    if (!running) return;
+    requestAnimationFrame(frame);
     const t = now / 1000;
+    const dt = Math.min(0.1, (now - lastFrameAt) / 1000); // cap: first frame after sleeping
+    lastFrameAt = now;
 
-    // Wake-up: spin a full turn and grow from small, easing to a stop.
+    // Wake-up: flip a full turn and grow from small, easing to a stop.
     const wakeProgress = Math.min(1, Math.max(0, (now - wakeStartedAt) / WAKE_FLIP_MS));
     const eased = 1 - Math.pow(1 - wakeProgress, 3);
     const wakeFlip = (1 - eased) * -Math.PI * 2;
@@ -124,36 +102,50 @@ export function createFace(container) {
       }
     }
 
-    // Gentle idle life: bob up and down, look slightly side to side.
     const slow = mode === 'away' ? 0.5 : 1;
-    head.rotation.x = wakeFlip + trickFlip;
-    head.rotation.y = Math.sin(t * 0.4 * slow) * 0.25 + trickSpin;
-    head.scale.set(size * (1 + squash * 0.5), size * (1 - squash), size * (1 + squash * 0.5));
+    const flip = wakeFlip + trickFlip;                              // around the side-to-side axis
+    const turn = Math.sin(t * 0.4 * slow) * LOOK_AROUND + trickSpin; // around the up-down axis
 
     // Head wobble. We advance a "phase" by speed x time-since-last-frame instead of
     // using sin(t * speed) directly, so switching speeds doesn't make the head jump.
     // Big bobble: just after waking, and while saying an Indian-accent line.
-    const dt = Math.min(0.1, (now - lastFrameAt) / 1000); // cap: first frame after sleeping
-    lastFrameAt = now;
     const bigBobble = now < excitedUntil || (talking && accent === 'en-IN');
     const speed = bigBobble ? WOBBLE_SPEED_INDIAN : talking ? WOBBLE_SPEED_TALKING : WOBBLE_SPEED;
     const targetAngle = bigBobble ? WOBBLE_ANGLE_INDIAN : talking ? WOBBLE_ANGLE_TALKING : WOBBLE_ANGLE;
     wobblePhase += dt * speed * slow;
     wobbleAngle += (targetAngle - wobbleAngle) * Math.min(1, dt * 4); // ease toward target
-    head.rotation.z = Math.sin(wobblePhase) * wobbleAngle;
-    // Pivot from the "neck": when the top tilts left, the whole head swings left too.
-    head.position.x = -Math.sin(head.rotation.z) * NECK_LENGTH;
-    head.position.y = Math.sin(t * 1.5 * slow) * 0.06 + hop;
+    const tiltDegrees = Math.sin(wobblePhase) * wobbleAngle * (180 / Math.PI);
+
+    // Whole head: float and hop, tilt from the "neck", then scale around the center.
+    // A flip is faked by squashing the height through zero (cos goes 1 -> -1 -> 1).
+    const y = Math.sin(t * 1.5 * slow) * BOB_HEIGHT - hop;
+    const sx = size * (1 + squash * 0.5);
+    const sy = size * (1 - squash) * Math.cos(flip);
+    head.setAttribute('transform',
+      `translate(0 ${y}) rotate(${tiltDegrees} ${CX} ${CY + NECK_LENGTH}) ` +
+      `translate(${CX} ${CY}) scale(${sx} ${sy}) translate(${-CX} ${-CY})`);
+
+    // The grid turns like a globe, and the face slides across and narrows with it.
+    drawMeridians(turn);
+    const faceShift = R * 0.85 * Math.sin(turn);
+    face.setAttribute('transform',
+      `translate(${CX + faceShift} 0) scale(${Math.cos(turn)} 1) translate(${-CX} 0)`);
+    // Hide the face while its back is toward us (mid-flip or mid-spin).
+    face.style.visibility = Math.cos(turn) > 0 && Math.cos(flip) > 0 ? 'visible' : 'hidden';
 
     // Blink: squash the eyes flat for a moment.
     const blinking = now >= nextBlinkAt && now < nextBlinkAt + BLINK_MS;
     if (now >= nextBlinkAt + BLINK_MS) nextBlinkAt = now + randomBetween(...BLINK_EVERY_MS);
-    leftEye.scale.y = rightEye.scale.y = blinking ? 0.1 : 1;
+    eyes.setAttribute('transform', blinking ? 'translate(0 355) scale(1 0.08) translate(0 -355)' : '');
+
+    // Brows go up when excited and lift now and then while talking.
+    const browTarget = bigBobble ? 12 : talking ? 7 * Math.abs(Math.sin(t * 2.1)) : 0;
+    browLift += (browTarget - browLift) * Math.min(1, dt * 6);
+    brows.setAttribute('transform', `translate(0 ${-browLift})`);
 
     // Talking: fake mouth movement while a line plays.
-    mouth.scale.y = talking ? 0.3 + 0.9 * Math.abs(Math.sin(t * 14) * Math.sin(t * 5.3)) : 0.15;
-
-    renderer.render(scene, camera);
+    const open = talking ? 0.55 + 0.9 * Math.abs(Math.sin(t * 14) * Math.sin(t * 5.3)) : 1;
+    mouth.setAttribute('transform', `translate(0 525) scale(1 ${open}) translate(0 -525)`);
 
     frames++;
     if (now - fpsWindowStart >= 1000) {
@@ -163,20 +155,40 @@ export function createFace(container) {
     }
   }
 
-  function setOpacity(value) {
-    frontLines.opacity = solid.opacity = value;
-    backLines.opacity = value * BACK_LINE_OPACITY;
+  // Longitude lines: each is half an ellipse from the top of the head to the bottom.
+  // A line at angle "lon" around the head sits R*sin(lon) from the middle,
+  // and is on the front when cos(lon) is positive.
+  function drawMeridians(turn) {
+    let front = '', back = '';
+    for (let i = 0; i < GRID_MERIDIANS; i++) {
+      const lon = turn + (i / GRID_MERIDIANS) * Math.PI * 2;
+      const rx = Math.abs(R * Math.sin(lon)).toFixed(1);
+      const side = Math.sin(lon) > 0 ? 1 : 0; // which way the arc bulges
+      const arc = `M${CX} ${CY - R}A${rx} ${R} 0 0 ${side} ${CX} ${CY + R}`;
+      if (Math.cos(lon) > 0) front += arc;
+      else back += arc;
+    }
+    frontMeridians.setAttribute('d', front);
+    backMeridians.setAttribute('d', back);
+  }
+
+  function scheduleTrick(now) {
+    const gap = randomBetween(...TRICK_EVERY_MS) * (mode === 'away' ? 2 : 1);
+    nextTrickAt = now + gap;
   }
 
   function wake() {
     mode = 'awake';
-    setOpacity(1);
-    renderer.domElement.style.visibility = 'visible';
+    svg.style.opacity = 1;
+    svg.style.visibility = 'visible';
     wakeStartedAt = performance.now();
     excitedUntil = wakeStartedAt + WAKE_FLIP_MS + EXCITED_AFTER_WAKE_MS;
     // Land the flip with a bounce, then do tricks on the usual schedule.
     trick = { kind: 'bounce', startedAt: wakeStartedAt + WAKE_FLIP_MS };
-    renderer.setAnimationLoop(frame);
+    if (!running) {
+      running = true;
+      requestAnimationFrame(frame);
+    }
     wakeDone = new Promise(resolve => setTimeout(resolve, WAKE_FLIP_MS));
     return wakeDone;
   }
@@ -185,25 +197,20 @@ export function createFace(container) {
   function sleep() {
     mode = 'sleeping';
     stopTalking();
-    renderer.setAnimationLoop(null);
-    renderer.domElement.style.visibility = 'hidden';
+    running = false;
+    svg.style.visibility = 'hidden';
     trick = null;
     nextTrickAt = Infinity;
   }
 
-  function scheduleTrick(now) {
-    const gap = randomBetween(...TRICK_EVERY_MS) * (mode === 'away' ? 2 : 1);
-    nextTrickAt = now + gap;
-  }
-
   function idle() {
     mode = 'away';
-    setOpacity(AWAY_OPACITY);
+    svg.style.opacity = AWAY_OPACITY;
   }
 
   function lookAlive() {
     mode = 'awake';
-    setOpacity(1);
+    svg.style.opacity = 1;
   }
 
   // Say a line: play its audio clip if it has one, otherwise use the
@@ -250,38 +257,111 @@ export function createFace(container) {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
   }
 
-  addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
-
   sleep();
   return { wake, sleep, idle, lookAlive, say, getFps: () => (mode === 'sleeping' ? 0 : fps) };
 }
 
-// A globe-style grid: latitude rings plus longitude lines, as pairs of points
-// for LineSegments. Unlike wireframe: true, this has no diagonal triangle edges.
-function makeGridGeometry(radius, around, down) {
-  const points = [];
-  const at = (lat, lon) => [
-    radius * Math.sin(lat) * Math.sin(lon),
-    radius * Math.cos(lat),
-    radius * Math.sin(lat) * Math.cos(lon),
-  ];
-  for (let i = 0; i <= down; i++) {
-    for (let j = 0; j < around; j++) {
-      const lat = (i / down) * Math.PI;
-      const lon = (j / around) * Math.PI * 2;
-      const nextLon = ((j + 1) / around) * Math.PI * 2;
-      const nextLat = ((i + 1) / down) * Math.PI;
-      if (i > 0 && i < down) points.push(...at(lat, lon), ...at(lat, nextLon)); // ring segment
-      if (i < down) points.push(...at(lat, lon), ...at(nextLat, lon));          // longitude segment
-    }
+// Latitude rings, split into front halves (lower arcs) and back halves (upper arcs).
+// They never move relative to the head, so they're built once.
+function ringPaths() {
+  let front = '', back = '';
+  for (let i = 1; i <= GRID_RINGS; i++) {
+    const lat = (i / (GRID_RINGS + 1)) * Math.PI; // 0 = top of the head, PI = bottom
+    const y = (CY - R * Math.cos(lat)).toFixed(1);
+    const rx = (R * Math.sin(lat)).toFixed(1);
+    const ry = (R * Math.sin(lat) * RING_TILT).toFixed(1);
+    const left = `M${CX - rx} ${y}`, right = `${CX + +rx} ${y}`;
+    front += `${left}A${rx} ${ry} 0 0 0 ${right}`;
+    back += `${left}A${rx} ${ry} 0 0 1 ${right}`;
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-  return geometry;
+  return { front, back };
+}
+
+// The drawing itself, from the Figma Make design. Classes are the parts frame() moves.
+function headSvg() {
+  const rings = ringPaths();
+  return `
+<svg viewBox="0 0 1200 800" style="display:block;width:100vw;height:100vh" aria-hidden="true">
+  <style>
+    .signal-break { animation: signal 7.2s steps(1, end) infinite; }
+    @keyframes signal {
+      0%, 68%, 72%, 100% { transform: translateX(0); opacity: 0.55; }
+      69% { transform: translateX(20px); opacity: 0.9; }
+      70% { transform: translateX(-12px); opacity: 0.28; }
+      71% { transform: translateX(6px); opacity: 0.75; }
+    }
+  </style>
+  <defs>
+    <radialGradient id="sphere-depth" cx="46%" cy="38%" r="66%">
+      <stop offset="0" stop-color="#1279a6" stop-opacity="0.12" />
+      <stop offset="0.68" stop-color="#063650" stop-opacity="0.06" />
+      <stop offset="1" stop-color="#01070b" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="wire-light" gradientUnits="userSpaceOnUse" x1="375" y1="153" x2="825" y2="651">
+      <stop stop-color="#b8f4ff" stop-opacity="0.86" />
+      <stop offset="0.48" stop-color="#39bce8" stop-opacity="0.58" />
+      <stop offset="1" stop-color="#08729f" stop-opacity="0.38" />
+    </linearGradient>
+    <linearGradient id="face-light" x1="0" x2="1">
+      <stop stop-color="#e0fbff" />
+      <stop offset="0.5" stop-color="#68ddff" />
+      <stop offset="1" stop-color="#1da7e1" />
+    </linearGradient>
+    <pattern id="fine-scan" width="5" height="5" patternUnits="userSpaceOnUse">
+      <rect width="5" height="1" fill="#d4f9ff" opacity="0.12" />
+    </pattern>
+    <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur result="blur" stdDeviation="5" />
+      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <clipPath id="sphere-clip"><circle cx="${CX}" cy="${CY}" r="${R}" /></clipPath>
+  </defs>
+
+  <g class="head">
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="url(#sphere-depth)" />
+
+    <g fill="none" stroke="url(#wire-light)" stroke-width="1.45">
+      <g opacity="${BACK_LINE_OPACITY}">
+        <path d="${rings.back}" />
+        <path class="meridians-back" />
+      </g>
+      <g opacity="0.66">
+        <path d="${rings.front}" />
+        <path class="meridians-front" />
+      </g>
+    </g>
+
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="url(#wire-light)" stroke-width="3" />
+    <circle cx="${CX}" cy="${CY}" r="${R - 7}" fill="none" stroke="#49c9ed" stroke-opacity="0.18" />
+
+    <g class="face" ${GLOW ? 'filter="url(#soft-glow)"' : ''}>
+      <g class="brows" fill="none" stroke="#68dcf9" stroke-linecap="round" stroke-width="7">
+        <path d="M452 314Q505 287 547 314" />
+        <path d="M650 309Q707 281 753 320" />
+      </g>
+      <g class="eyes">
+        <path d="M447 355Q501 316 557 355Q506 405 447 355Z" fill="url(#face-light)" fill-opacity="0.74" stroke="#b9f5ff" stroke-width="3" />
+        <path d="M646 353Q704 309 761 356Q707 406 646 353Z" fill="url(#face-light)" fill-opacity="0.74" stroke="#b9f5ff" stroke-width="3" />
+        <ellipse cx="518" cy="354" rx="13" ry="18" fill="#00131e" />
+        <ellipse cx="717" cy="353" rx="13" ry="18" fill="#00131e" />
+        <circle cx="523" cy="348" r="4" fill="#e6fcff" />
+        <circle cx="722" cy="347" r="4" fill="#e6fcff" />
+        <path d="M447 355Q501 316 557 355Q506 405 447 355ZM646 353Q704 309 761 356Q707 406 646 353Z" fill="url(#fine-scan)" />
+      </g>
+      <g class="mouth">
+        <path d="M503 512Q580 555 691 500Q645 561 554 550Q519 543 503 512Z" fill="#00090e" stroke="#72e3ff" stroke-linejoin="round" stroke-width="5" />
+        <path d="M531 531Q611 552 671 515" fill="none" stroke="#d9faff" stroke-linecap="round" stroke-opacity="0.75" stroke-width="4" />
+      </g>
+    </g>
+
+    <g clip-path="url(#sphere-clip)">
+      <g class="signal-break">
+        <rect x="301" y="444" width="598" height="5" fill="#8be9ff" opacity="0.28" />
+        <rect x="369" y="447" width="422" height="2" fill="#d6faff" opacity="0.48" />
+      </g>
+    </g>
+  </g>
+</svg>`;
 }
 
 // Find an installed voice for an accent like "en-IN". Falls back to any English voice.
